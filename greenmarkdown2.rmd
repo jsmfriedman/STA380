@@ -1,0 +1,818 @@
+---
+title: "Introduction to Predictive Modeling"
+author: "Dandi Chen, Jermey Friedman, Josh Fancher, Lin Chen"
+date: "8/19/2019"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Predictive Modeling Question Set 
+
+## Visual Story telling part 1: Green Buildings
+
+In this analysis we investigate the economic impact of going green for a new construction project. The building of interest is a 15-story mixed-use building on East Cesar Chavez. Construction costs are $100 million, with a 5% expected premium for green certification.
+The data was cleaned to remove records with missing values and outliers. The feature column empl_gr contained both missing values and outliers. Feature column leasing_rate contained records with very low leasing rates, hence, buildings with leasing rates <10% were removed from the analysis. 
+Initially analysis shows. 
+
+```{r}
+green = read.csv("/Users/dandichen/Desktop/Stats\ Summer\ 2019/STA380/data/greenbuildings.csv")
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(knitr)
+attach(green)
+
+# convert categorical flags to factors 
+green$cluster = as.factor(green$cluster)
+green$green_rating = as.factor(green$green_rating)
+green$Energystar = as.factor(green$Energystar)
+green$LEED = as.factor(green$LEED)
+green$net = as.factor(green$net)
+green$amenities = as.factor(green$amenities)
+
+# drop rows with NA in the empl_gr
+green = na.omit(green)
+
+# something weird with growth rate values 
+# very high and low outliers?
+# remove from analysis 
+# -24.950, 67.780 
+green = green[green$empl_gr != -24.950,]
+green = green[green$empl_gr != 67.780,]
+
+# remove data point where leasing rate is less then 10%
+green = green[green$leasing_rate > 10,]
+  
+```
+
+```{r, echo = FALSE}
+green[green$class_a == 1, "building_class"] = "A"
+green[green$class_b == 1, "building_class"] = "B"
+green[is.na(green$building_class), "building_class"] = "C"
+```
+
+```{r, echo = FALSE}
+# Density Plot – Green building rents are higher 
+
+g = ggplot(data = green, aes(x=Rent))
+g + geom_density(aes(fill=factor(green_rating)), alpha = 0.6) +
+  theme_bw(base_size=18) +
+  labs(title="Density Plot", 
+       subtitle="Rent by green rating",
+       x="Rent",
+       fill="Green Rating")
+```
+With a density plot we see that overall, rents are generally higher in green builings. - Non-Greem(0) and Green(1)
+
+
+```{r, echo = FALSE}
+# Box Plot – building rent differences 
+# Building Rent Differences
+ggplot(data=green) + 
+  geom_boxplot(aes(x=green_rating, y=Rent)) + 
+  theme_bw(base_size=18) +
+  labs(y="Rent", 
+       x="Green Rating", 
+       title="Building Rents", 
+       subtitle = "Non-Green vs Green")
+```
+
+```{r, echo = FALSE}
+rent_summ = green %>% 
+  group_by(green_rating) %>% 
+  summarize(mean_rents= mean(Rent)) %>% kable
+rent_summ
+
+```
+
+With the boxplot, again, we see overall rents are higher in green buildings. Summary staistics reveal higher rents in Green Buildings.- Non-Greem(0) and Green(1) 
+
+
+Next, Leasing Rates were investigated 
+
+```{r, echo = FALSE}
+ggplot(data=green) + 
+  geom_boxplot(aes(x=green_rating, y=leasing_rate)) + 
+  theme_bw(base_size=18) +
+  labs(y="Leasing Rate", 
+       x="Green Rating", 
+       title="Leasing Rate", 
+       subtitle = "Non-Green vs Green")
+```
+
+```{r, echo = FALSE}
+lease_rate = green %>% 
+  group_by(green_rating) %>% 
+  summarize(mean_leasing_rate = mean(leasing_rate)) %>% kable
+
+lease_rate
+```
+
+We can see leasing rates are higher in green buildings. - Non-Greem(0) and Green(1)
+
+In addtion, we can look at leasing rates vs rents, delininated by Non-Greem(0) and Green(1)
+
+```{r, echo = FALSE}
+# rents and leasing rate higher in green buildings 
+ggplot(data=green) + 
+  geom_point(aes(x=Rent, y=leasing_rate, col = green_rating), alpha = 0.6) + 
+  theme_bw(base_size=18) +
+  labs(y="Leasing Rate",
+       x="Rent / Square Foot Per Year", 
+       title="Leasing Rate vs Rent", 
+       subtitle = "Green and Non-Green Buildings")
+```
+
+We have higher leasing rates and higher rents. 
+
+
+Shifting gears, we take a look at the ages of buildings and the effect is has on rents
+
+```{r, echo = FALSE}
+ggplot(data=green) + 
+  geom_boxplot(aes(x=green_rating, y=age)) + 
+  theme_bw(base_size=18) +
+  facet_wrap(~ building_class, ncol = 3) +
+  labs(y="Age of Building", 
+     x="Green Rating", 
+     title="Building Ages", 
+     subtitle = "Non-Green vs Green | Building Class")
+```
+
+We see that Green buildings are younger in each building class type. 
+
+```{r, echo = FALSE}
+ggplot(data=green) + 
+  geom_point(aes(x=age, y=Rent)) + 
+  theme_bw(base_size=18) +
+  facet_wrap(~ green_rating, ncol = 3) +
+  geom_smooth(data = green, method="lm", formula =y~x, aes(x = green$age, y = green$Rent))+
+  labs(y="Rent",
+       x="Age",
+       title="Building Age and Rent",
+       subtitle = "Green and Non-Green Buildings")
+```
+
+Looking at by - Non-Greem(0) and Green(1) - and fitting a regression line we see that rents might slightly decline over time in Non-Green Buildings and possibly increase or remain flat as a Green building ages. 
+
+
+Further investigating the data, Year-on-Year employment growth rate revealed findings to be considered.
+```{r, echo = FALSE}
+# year on Year employment rate differences 
+# important to know the year on year employment rate – is this is positive in the Austin area. 
+
+ggplot(data=green) + 
+  geom_boxplot(aes(x=green_rating, y=empl_gr)) + 
+  theme_bw(base_size=18) +
+  labs(y="Growth rate of employement", 
+       x="Green Rating", 
+       title="Year-on-Year Employment Growth ", 
+       subtitle = "Non-Green vs Green")
+```
+
+```{r, echo = FALSE}
+emp_summ = green %>% 
+  group_by(green_rating) %>% 
+  summarize(mean_emp_rate = mean(empl_gr)) %>% kable
+
+emp_summ
+
+```
+
+Green buildings are genearlly built in area with higher Year-on-Year employment growth rates. If the Austin should have Employment of at least 2.538
+
+
+At this point in the analysis, we were initially ready to endorse the original analysts’ findings.  Further investigating the data and sub setting by building class revealed eye opening insights.  
+
+Summary statistics of mean rents based on Class A Buildings are shown below. 
+```{r, echo = FALSE}
+green_class_a = green[green$building_class== "A",]
+
+green_class_a_rents = green_class_a %>% 
+  group_by(green_rating) %>% 
+  summarize(mean_rent = mean(Rent)) %>% kable
+
+green_class_a_rents
+
+```
+
+Strikingly, we see Green Buildings - Non-Greem(0) and Green(1) - in the Class A category have lower mean rents. 
+
+
+Summary statistics of mean rents based on Class B Buildings are shown below. 
+
+```{r, echo = FALSE}
+green_class_b = green[green$building_class== "B",]
+green_class_b_rents = green_class_b %>% 
+  group_by(green_rating) %>% 
+  summarize(mean_rent = mean(Rent)) %>% kable
+green_class_b_rents
+
+```
+
+Green Buildings in the Class B category have lower mean rents as well.
+
+
+Summary statistics of mean rents based on Class C Buildings are shown below. 
+
+```{r, echo = FALSE}
+green_class_c = green[green$building_class== "C",]
+green_class_c_rents = green_class_c %>% 
+  group_by(green_rating) %>% 
+  summarize(mean_rent = mean(Rent)) %>% kable
+green_class_c_rents
+
+```
+
+Green Buildings in the Class C category have Higher mean rents as well.
+
+
+Finally, the mean leasing rate of Non-Green(0) vs Green Buildings(1) was analyzed. 
+
+```{r, echo = FALSE}
+green_lease = green_class_a %>% 
+  group_by(green_rating) %>% 
+  summarize(mean_rent = mean(leasing_rate)) %>% kable
+
+green_lease
+```
+
+We see green buildings have 1.56% higher leasing rates.  
+
+
+
+
+Our analysis revealed the important consideration of Building Class. If the intended Building Class is of type A then going green is not advised. The analysis revealed mean rents $1.7 per/square foot lower than non-green buildings. 
+If the intended Building Class is of type B then going green is not advised. Mean rents $0.3 per/square foot lower than non-green buildings. 
+If on the other hand the Building Class is intended to be of type C then going green is advised. Mean rents are 5.7 per/square foot higher than non-green buildings.
+
+In conclusion, we wouldn’t recommend going green unless the building class of type C. 
+
+-------------------------------------------------------------------------------------
+
+# Problem 2:
+
+## (1) Data Cleaning
+From the summary statistics, firstly we can see `CarrierDelay`, `WeatherDelay`, `NASDelay`, `SecurityDelay` and `LateAircraftDelay` have a lot of missing values and these columns should be excluded from the dataset. Secondly, there are some missing value in other features and we would like to drop any rows with missing values. 
+After removing rows with missing values, `Cancelled`, `CancellationCode` and `Diverted` are all 0. Thus, we decide to remove them too.
+```{r}
+ABIA <- read.csv("/Users/dandichen/Desktop/Stats\ Summer\ 2019/STA380/data/ABIA.csv")
+#str(ABIA)
+summary(ABIA)
+ABIA <- ABIA[, c(1:24)]
+ABIA <- ABIA[complete.cases(ABIA), ]
+ABIA <- ABIA[, c(1:21)] 
+```
+
+## (2) Data Visualization
+From the below graphes, we can see the travel distance doesn't vary a lot among different month. Travel distances are longest during the summer and shortest during the winter. The airplanes that depart at the 31st won't travel as long as others. And Southwest Airline and American Airline travel longest on average.
+```{r}
+library(ggplot2)
+# investigate month and mean distance
+ggplot(ABIA, aes(x=as.factor(Month), y=mean(Distance))) + 
+  geom_col() + xlab("Month") + ylab("mean Distance")
+
+# investigate day of month and mean distance
+ggplot(ABIA, aes(x=as.factor(DayofMonth), y=mean(Distance))) + 
+  geom_col() + xlab("DayofMonth)") + ylab("mean Distance")
+
+# investigate day of Week and mean distance
+ggplot(ABIA, aes(x=as.factor(DayOfWeek), y=mean(Distance))) + 
+  geom_col() + xlab("DayofWeek)") + ylab("mean Distance")
+
+# invesigate airline and mean distance
+ggplot(ABIA, aes(x=UniqueCarrier, y=mean(Distance))) + 
+  geom_col() + xlab("Carrier") + ylab("mean Distance")
+```
+
+
+
+Plot the top 10 origins and 10 destinations in IATA airport.
+```{r}
+library(ggplot2)
+library(dplyr)
+
+ABIA %>% 
+  group_by(Origin) %>%
+  summarize(count=n()) %>%
+  arrange(desc(count)) %>% 
+  top_n(10) %>%
+  ggplot(aes(x=Origin, y=count)) +
+  geom_col()
+
+ABIA %>% 
+  group_by(Dest) %>%
+  summarize(count=n()) %>%
+  arrange(desc(count)) %>% 
+  top_n(10) %>%
+  ggplot(aes(x=Dest, y=count)) +
+  geom_col()
+```
+
+Mutate the ABIA and constucted `DepLate`, `ArrLate` and `LapsedLong` three dummy variables. `DepLate` variable is created by whether the flight departed late. If it was, the value of this variable is 1. It is same for the creation of `ArrLate` and `LapsedLong` variables.
+```{r}
+ABIA$DepLate <- rep(0, nrow(ABIA))
+ABIA$ArrLate <- rep(0, nrow(ABIA))
+ABIA$LapsedLong <- rep(0, nrow(ABIA))
+ABIA[ABIA$DepDelay > 0, ][, "DepLate"] <- 1
+ABIA[ABIA$DepDelay <= 0, ][, "DepLate"] <- 0
+ABIA[ABIA$ArrDelay > 0, ][, "ArrLate"] <- 1
+ABIA[ABIA$ArrDelay <= 0, ][, "ArrLate"] <- 0
+ABIA[(ABIA$CRSElapsedTime - ABIA$ActualElapsedTime) > 0, ][, "LapsedLong"] <- 0
+ABIA[(ABIA$CRSElapsedTime - ABIA$ActualElapsedTime) <= 0, ][, "LapsedLong"] <- 1
+```
+
+
+By calculate the number of delayed departure, arrival and excess Lapsed travel flights for each Carrier, we figured out the every carrier is less likely to depart late except for EV and WN. Basically, flights of every carrier travel more time than they are described and their probabilities of arriving late is around 0.5 except for DL, NW and OH. Accounting for these three factors, it seems that US and 9E airline are the  two most reliable ones.
+```{r}
+library(dplyr)
+planeDelay <- group_by(ABIA, UniqueCarrier)
+delay <- summarize(planeDelay,
+                   depLate_count = sum(DepLate),
+                   depLate_percent = sum(DepLate)/n(),
+                   arrLate_count = sum(ArrLate),
+                   arrLate_percent = sum(ArrLate)/n(),
+                   LapsedLong_count = sum(LapsedLong),
+                   LapsedLong_percent = sum(LapsedLong)/n()
+                   )
+delay_select <- select(delay,UniqueCarrier, depLate_percent, arrLate_percent, LapsedLong_percent)
+delay_select %>% 
+  gather("Type", "Value", -UniqueCarrier) %>%
+  ggplot(aes(UniqueCarrier,Value, fill=Type)) +
+  geom_bar(position = "dodge", stat = "identity") +
+  xlab("Carrier") + ylab("Percent")+
+  theme_bw()
+  #facet_wrap(~UniqueCarrier,scales = "free_x")
+
+
+```
+-----------------------------------------------------------------------------------
+#3  Conservative Portfolio - All bonds - Looking for low risk 
+```{r, include = FALSE}
+library(mosaic)
+library(quantmod)
+library(foreach)
+```
+# Portfolio Modeling part 3
+
+
+## Low Risk / Safe Portfolio
+Consists of 5 EFTs with focus on government bonds. This portfolio is meant to minimize the risk of losses. EFTs selected: IEF, SHY, TLT, GOVT, SHV
+
+```{r, include = FALSE, echo=FALSE}
+stocks = c("IEF", "SHY", "TLT", "GOVT", "SHV")
+prices = getSymbols(stocks, from = "2015-01-01")
+
+# A chunk of code for adjusting all stocks
+# creates a new object adding 'a' to the end
+for(ticker in stocks) {
+  expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+  eval(parse(text=expr))
+}
+
+# Combine all the returns in a matrix
+all_returns = cbind(	ClCl(IEFa),
+                     ClCl(SHYa),
+                     ClCl(TLTa), 
+                     ClCl(GOVTa), 
+                     ClCl(SHVa))
+
+head(all_returns)
+all_returns = as.matrix(na.omit(all_returns))
+
+pairs(all_returns)
+```
+
+```{r, echo=FALSE}
+# One loop over four trading weeks
+total_wealth = 10000
+weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+holdings = weights * total_wealth
+n_days = 20
+wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+for(today in 1:n_days) {
+	return.today = resample(all_returns, 1, orig.ids=FALSE)
+	holdings = holdings + holdings*return.today
+	total_wealth = sum(holdings)
+	wealthtracker[today] = total_wealth
+}
+```
+
+```{r}
+total_wealth
+plot(wealthtracker, type='l')
+```
+
+```{r, echo=FALSE}
+# Now simulate many different possible scenarios  
+initial_wealth = 10000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+	total_wealth = initial_wealth
+	weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+	holdings = weights * total_wealth
+	n_days = 20
+	wealthtracker = rep(0, n_days)
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+	wealthtracker
+}
+
+```
+
+```{r}
+hist(sim1[,n_days] - initial_wealth, 25, main = "Histogram of Profit/Losses")
+```
+
+```{r}
+# 5% 20-day VaR
+VaR = round(sort(sim1[,n_days])[250] - initial_wealth, 2)
+paste0("The 5% 20-day VaR for this portfolio is a loss of: $", abs(VaR))
+```
+
+
+## High Risk / Aggressive Portfolio
+Consists of 5 EFTs focusing on technology companies. This portfolio is aggressive and is meant to maximize potential returns with an increased risk of losses. EFTs selected: XLK, VGT, IYW, IGV, IXN
+
+```{r, echo=FALSE}
+stocks = c("XLK", "VGT", "IYW", "IGV", "IXN")
+prices = getSymbols(stocks, from = "2015-01-01")
+
+# A chunk of code for adjusting all stocks
+# creates a new object adding 'a' to the end
+for(ticker in stocks) {
+  expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+  eval(parse(text=expr))
+}
+
+# Combine all the returns in a matrix
+all_returns = cbind(	ClCl(XLKa),
+                     ClCl(VGTa),
+                     ClCl(IYWa), 
+                     ClCl(IGVa), 
+                     ClCl(IXNa))
+
+
+all_returns = as.matrix(na.omit(all_returns))
+
+
+```
+
+```{r, echo=FALSE}
+# One loop over four trading weeks
+total_wealth = 10000
+weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+holdings = weights * total_wealth
+n_days = 20
+wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+for(today in 1:n_days) {
+	return.today = resample(all_returns, 1, orig.ids=FALSE)
+	holdings = holdings + holdings*return.today
+	total_wealth = sum(holdings)
+	wealthtracker[today] = total_wealth
+}
+```
+
+```{r}
+total_wealth
+plot(wealthtracker, type='l')
+```
+
+```{r, echo=FALSE}
+# Now simulate many different possible scenarios  
+initial_wealth = 10000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+	total_wealth = initial_wealth
+	weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+	holdings = weights * total_wealth
+	n_days = 20
+	wealthtracker = rep(0, n_days)
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+	wealthtracker
+}
+
+#head(sim1)
+```
+
+```{r}
+hist(sim1[,n_days] - initial_wealth, 25, main = "Histogram of Profit/Losses")
+```
+```{r}
+# 5% 20-day VaR
+VaR = round(sort(sim1[,n_days])[250] - initial_wealth, 2)
+paste0("The 5% 20-day VaR for this portfolio is a loss of: $", abs(VaR))
+```
+
+
+## Diverse / Balanced Portfolio
+Consists of 5 EFTs balanced in different sectors. This is meant to serve as a middle ground between Low Risk and High Risk portfolios. The intent is to capture higher returns while still trying to minimize risk. EFTs selected: JPST - Money Market,  USO - Oil and Gas, AGG - Total Bond, VNQ – Real Estate, GLD -  Precious Metals. 
+
+
+```{r, echo=FALSE}
+stocks = c("JPST", "USO", "AGG", "VNQ", "GLD")
+prices = getSymbols(stocks, from = "2015-01-01")
+
+# A chunk of code for adjusting all stocks
+# creates a new object adding 'a' to the end
+for(ticker in stocks) {
+  expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+  eval(parse(text=expr))
+}
+
+# Combine all the returns in a matrix
+all_returns = cbind(	ClCl(JPSTa),
+                     ClCl(USOa),
+                     ClCl(AGGa), 
+                     ClCl(VNQa), 
+                     ClCl(GLDa))
+
+
+all_returns = as.matrix(na.omit(all_returns))
+
+
+```
+```{r, echo=FALSE}
+# One loop over four trading weeks
+total_wealth = 10000
+weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+holdings = weights * total_wealth
+n_days = 20
+wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+for(today in 1:n_days) {
+	return.today = resample(all_returns, 1, orig.ids=FALSE)
+	holdings = holdings + holdings*return.today
+	total_wealth = sum(holdings)
+	wealthtracker[today] = total_wealth
+}
+```
+
+```{r}
+total_wealth
+plot(wealthtracker, type='l')
+```
+
+```{r, echo = FALSE}
+# Now simulate many different possible scenarios  
+initial_wealth = 10000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+	total_wealth = initial_wealth
+	weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+	holdings = weights * total_wealth
+	n_days = 20
+	wealthtracker = rep(0, n_days)
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+	wealthtracker
+}
+```
+
+```{r}
+hist(sim1[,n_days] - initial_wealth, 25, main = "Histogram of Profit/Losses")
+```
+
+```{r}
+# 5% 20-day VaR
+VaR = round(sort(sim1[,n_days])[250] - initial_wealth, 2)
+paste0("The 5% 20-day VaR for this portfolio is a loss of: $", abs(VaR))
+```
+
+-------------------------------------------------------------
+
+# Problem 4
+Read in the file first and scale all the columns(except for the first column which includes the randomly generated number & letter combination.
+
+```{r}
+marketing <- read.csv("/Users/dandichen/Desktop/Stats\ Summer\ 2019/STA380/data/social_marketing.csv")
+summary(marketing)
+marketing_std <- scale(marketing[, -1], center=TRUE, scale=TRUE)
+```
+
+
+Get the sequence from 2 to 20, then write a loop for k means andand get the withiness get elbow plot
+```{r}
+library(foreach)
+k_grid = seq(2, 20, by=1)
+SSE_grid = foreach(k = k_grid, .combine='c') %do% {
+  cluster_k = kmeans(marketing_std, k, nstart=50, iter.max = 30)
+  cluster_k$tot.withinss
+}
+plot(k_grid, SSE_grid)
+```
+
+get marketpca from scaled columns 2:. Do the PCA analysis, get the sdev and var. 
+Then get the PCA and the variable names. We have determined in the next line that the 80% of the variance from the original dataset is captured by the top 18 PCA and get the first 18 PC columns. 
+
+```{r}
+marketpca = prcomp(marketing[,-1], scale.=TRUE)
+summary(marketpca)
+plot(marketpca)
+loading = marketpca$rotation
+cumsum(marketpca$sdev^2)[18]/sum(marketpca$sdev^2) # over 80% of the variance
+score = marketpca$x
+score_18 = score[, 1:18]
+```
+
+Plot the elbow plot for the first 18 pca. We determined to use 20 as our cluster numbers.
+```{r}
+library(foreach)
+k_grid = seq(2, 20, by=1)
+SSE_grid = foreach(k = k_grid, .combine='c') %do% {
+  cluster_k = kmeans(score_18, k, nstart=50, iter.max = 30)
+  cluster_k$tot.withinss
+}
+plot(k_grid, SSE_grid)
+
+```
+
+
+Perform clustering for 20 clusters and get the means for every variable and save them in a column.
+```{r}
+clust <- kmeans(score_18, 20, nstart=25, iter.max = 30)
+clustmatrix <- matrix(0, nrow=36, ncol=1)
+for (i in (1:20)) {
+  s <- apply(marketing[which(clust$cluster == i), 2:37], 2, mean)
+  clustmatrix <- cbind(clustmatrix, s)
+}
+clustmatrix <- clustmatrix[, -1]
+clustdf <- as.data.frame(clustmatrix)
+colnames(clustdf) <- c(1:20)
+?kmeans
+```
+-------------------------------------------------------------
+# Author Attribution
+
+```{r echo = FALSE, message = FALSE}
+rm(list=ls())
+library(tm) 
+library(magrittr)
+library(slam)
+library(proxy)
+```
+
+## (1) Step one:
+Read in all the text files and put them into traning and test set.
+
+```{r}
+readerPlain = function(fname){
+  readPlain(elem=list(content=readLines(fname)), 
+            id=fname, language='en') }
+
+train_file = Sys.glob('/Users/dandichen/Desktop/Stats\ Summer\ 2019/STA380/data/ReutersC50/C50train/*/*.txt')
+test_file = Sys.glob('/Users/dandichen/Desktop/Stats\ Summer\ 2019/STA380/data/ReutersC50/C50test/*/*.txt')
+train = lapply(train_file, readerPlain) 
+test = lapply(test_file, readerPlain) 
+
+```
+
+## (2) Step two:
+Save the author names in train and test set and create 'Corpus' for the test mining.
+
+```{r}
+names_train = train_file %>%
+  { strsplit(., '/', fixed=TRUE) } %>%
+  { lapply(., tail, n=2) } %>%
+  { lapply(., head, n=1) } %>%
+  { lapply(., paste0, collapse = '') } %>%
+  unlist
+
+names_test = test_file %>%
+  { strsplit(., '/', fixed=TRUE) } %>%
+  { lapply(., tail, n=2) } %>%
+  { lapply(., head, n=1) } %>%
+  { lapply(., paste0, collapse = '') } %>%
+  unlist
+
+names(train) = names_train
+names(test) = names_test
+document_train_raw = Corpus(VectorSource(train))
+document_test_raw  = Corpus(VectorSource(test))
+
+```
+
+
+## Step three:
+Pre-processing/tokenization of text 
+
+```{r}
+document_train = document_train_raw
+document_train = tm_map(document_train, content_transformer(tolower))  # lowercase
+document_train = tm_map(document_train, content_transformer(removeNumbers))  # remove numbers
+document_train = tm_map(document_train, content_transformer(removePunctuation))  # remove punctuation
+document_train = tm_map(document_train, content_transformer(stripWhitespace))  # remove white-space
+
+document_test = document_test_raw
+document_test = tm_map(document_test, content_transformer(tolower)) 
+document_test = tm_map(document_test, content_transformer(removeNumbers)) 
+document_test = tm_map(document_test, content_transformer(removePunctuation)) 
+document_test = tm_map(document_test, content_transformer(stripWhitespace)) 
+
+document_train = tm_map(document_train, content_transformer(removeWords), stopwords("en")) # remove stopwords
+document_test = tm_map(document_test, content_transformer(removeWords), stopwords("en"))
+
+```
+
+
+## Step four:
+Create two doc-term-matrix for train and test sets. We also convert word counts into IF-IDF scores.
+Then we remove the sparese terms.
+
+```{r}
+DTM_train = DocumentTermMatrix(document_train, control = list(weighting = weightTfIdf))
+DTM_test = DocumentTermMatrix(document_test, control = list(weighting = weightTfIdf))
+
+DTM_train = removeSparseTerms(DTM_train, 0.98)
+DTM_test = removeSparseTerms(DTM_test, 0.98)
+```
+
+
+
+## Step five:
+Use the intersect function to find words that are in both train and test set. 
+```{r}
+DTM_train_df = as.data.frame(as.matrix(DTM_train))
+DTM_test_df = as.data.frame(as.matrix(DTM_test))
+
+intersection = intersect(names(DTM_train_df),names(DTM_test_df))
+DTM_train_df = DTM_train_df[,intersection]
+DTM_test_df = DTM_test_df[,intersection]
+
+```
+
+
+## Step six:
+Transform the train and test dataframe by adding auther names column.
+```{r}
+author_train = factor(names(train))
+author_test = factor(names(test))
+
+X_train<-data.frame(DTM_train_df)
+X_train$author = author_train
+X_test<-data.frame(DTM_test_df)
+X_test$author = author_test
+
+```
+
+
+## Step seven:
+Use Random Forest model.Random forest model shows the accurayc of 62.2%
+
+```{r}
+set.seed(1)
+library(randomForest)
+rf.listing = randomForest(author ~ ., data = X_train,
+                          distribution = 'multinomial',
+                          n.trees=200, mtry = 80)
+rf.pred = data.frame(predict(rf.listing,newdata = X_test))
+compare_rf = data.frame(cbind(rf.pred,X_test$author))
+compare_rf$correct = compare_rf$predict.rf.listing..newdata...X_test. == compare_rf$X_test.author
+mean(compare_rf$correct)
+
+```
+------------------------------------------
+# Problem 6
+
+##(1): Read data
+To start with, we read the data and got the overall distribution of item frequencies.
+```{r}
+library(tidyverse)
+library(arules)  # has a big ecosystem of packages built around it
+library(arulesViz)
+
+groceries = read.transactions("//Users/dandichen/Desktop/Stats\ Summer\ 2019/STA380/data/groceries.txt", sep=',')
+summary(itemFrequency(groceries))
+```
+
+##(2): Rules
+Because the 1st quantile of item frequency is 0.0038 so we set the support as 0.004 and we set the confidence level as we want to focus only on those with high confidence.
+```{r}
+grules = apriori(groceries, 
+	parameter=list(support=.004, confidence=.2, maxlen=4))
+
+plot(grules, measure = c("support", "lift"), shading = "confidence")
+plot(grules, measure = c("support", "confidence"), shading = "lift")
+plot(grules, method='two-key plot')
+```
+
+##(3) Choose a subset
+From the above graph, we choose the rule with a values equal to 4. It means that people who purchase lhs are 5 times more likely to purchase rhs than the typical consumer. So this rule may be valuable to the retailer.
+```{r}
+subset_grule <- subset(grules, subset=lift > 4)
+inspect(subset_grule)
+plot(subset_grule, method='graph')
+plot(head(subset_grule, 10, by='lift'), method='graph')
+```
